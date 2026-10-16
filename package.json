@@ -1,0 +1,16 @@
+{
+  "name": "serp-extractor",
+  "version": "1.0.0",
+  "description": "Zadá se klíčové slovo, vrátí organické výsledky 1. strany Google a umožní export do JSON/CSV/XML.",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test --test-reporter=spec \"test/*.test.js\""
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,17 @@
+# Nasazení na Render.com (free tier): New → Blueprint → vybrat repozitář.
+# Po nasazení doplňte v dashboardu proměnnou SERPAPI_KEY (nebo SERPER_API_KEY).
+services:
+  - type: web
+    name: serp-extractor
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: SERPAPI_KEY
+        sync: false
+      - key: GOOGLE_GL
+        value: cz
+      - key: GOOGLE_HL
+        value: cs
+      - key: GOOGLE_DOMAIN
+        value: google.cz

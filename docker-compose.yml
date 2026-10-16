@@ -1,0 +1,27 @@
+# Lokální vývoj:  docker compose up
+# Testy:          docker compose run --rm tests
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "3000"
+      # Bez klíče a s MOCK=1 běží aplikace s jasně označenými demo daty.
+      MOCK: "${MOCK:-0}"
+    # Zdrojáky jsou připojené, takže změny se projeví po restartu (node --watch)
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    command: ["node", "--watch", "src/server.js"]
+
+  tests:
+    build: .
+    profiles: ["test"]
+    command: ["node", "--test", "--test-reporter=spec", "test/*.test.js"]
+    volumes:
+      - ./src:/app/src
+      - ./test:/app/test

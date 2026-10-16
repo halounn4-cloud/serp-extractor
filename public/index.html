@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Google SERP extractor</title>
+  <style>
+    :root {
+      --bg: #f6f7f9; --card: #fff; --text: #1c2430; --muted: #657084; --line: #e2e6ec;
+      --accent: #1f5eff; --accent-text: #fff; --danger: #b42318; --warn-bg: #fff4d6; --warn-text: #7a5600;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12161c; --card: #1a2029; --text: #e8ecf2; --muted: #98a3b5; --line: #2a3340;
+        --accent: #6b93ff; --accent-text: #0b1020; --danger: #ff8a80; --warn-bg: #3a2f10; --warn-text: #ffd98a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 24px; }
+    form { display: flex; gap: 8px; }
+    input[type=search] { flex: 1; padding: 12px 14px; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+    input[type=search]:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button { font: inherit; padding: 12px 18px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+    button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+    button:disabled { opacity: .55; cursor: progress; }
+    #status { margin: 16px 0 0; min-height: 1.5em; color: var(--muted); }
+    #status.error { color: var(--danger); }
+    .banner { background: var(--warn-bg); color: var(--warn-text); padding: 8px 12px; border-radius: 8px; margin-top: 12px; font-size: .9rem; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 20px 0 12px; }
+    .toolbar .meta { flex: 1; color: var(--muted); font-size: .9rem; min-width: 160px; }
+    .toolbar button { padding: 8px 14px; }
+    ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+    li { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 32px 1fr; gap: 10px; }
+    .pos { color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; }
+    .title { font-weight: 600; color: var(--accent); text-decoration: none; overflow-wrap: anywhere; }
+    .title:hover { text-decoration: underline; }
+    .url { color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+    .snippet { margin: 4px 0 0; font-size: .95rem; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Google SERP extractor</h1>
+  <p class="sub">Zadejte klíčové slovo a získáte organické výsledky 1. strany Google. Export do JSON, CSV nebo XML.</p>
+
+  <form id="form">
+    <input id="q" type="search" name="q" placeholder="např. kávovar do 5000 Kč" maxlength="200" autocomplete="off" aria-label="Klíčové slovní spojení" required autofocus>
+    <button class="primary" id="go" type="submit">Hledat</button>
+  </form>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <div id="demo" class="banner" hidden>Demo režim: zobrazená data jsou ukázková, nejde o skutečné výsledky Google.</div>
+
+  <section id="out" hidden>
+    <div class="toolbar">
+      <span class="meta" id="meta"></span>
+      <button data-format="json">Uložit JSON</button>
+      <button data-format="csv">Uložit CSV</button>
+      <button data-format="xml">Uložit XML</button>
+    </div>
+    <ol id="list"></ol>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let current = null; // poslední odpověď z /api/search
+
+  function setStatus(msg, isError = false) {
+    $('status').textContent = msg;
+    $('status').className = isError ? 'error' : '';
+  }
+
+  function render(data) {
+    $('list').replaceChildren(
+      ...data.results.map((r) => {
+        const li = document.createElement('li');
+        const pos = Object.assign(document.createElement('span'), { className: 'pos', textContent: r.position });
+        const body = document.createElement('div');
+        const a = Object.assign(document.createElement('a'), {
+          className: 'title', textContent: r.title || r.url, href: r.url, target: '_blank', rel: 'noopener noreferrer',
+        });
+        const url = Object.assign(document.createElement('div'), { className: 'url', textContent: r.displayedUrl || r.url });
+        const sn = Object.assign(document.createElement('p'), { className: 'snippet', textContent: r.snippet });
+        body.append(a, url, sn);
+        li.append(pos, body);
+        return li;
+      }),
+    );
+    $('meta').textContent = `„${data.query}“ · ${data.count} výsledků` + (data.cached ? ' · z cache' : '');
+    $('demo').hidden = !data.demo;
+    $('out').hidden = false;
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = $('q').value.trim();
+    if (!q) return;
+    $('go').disabled = true;
+    $('out').hidden = true;
+    $('demo').hidden = true;
+    current = null;
+    setStatus('Načítám výsledky…');
+    try {
+      const res = await fetch('/api/search?' + new URLSearchParams({ q }));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Chyba ${res.status}`);
+      current = data;
+      if (!data.count) { setStatus('Žádné organické výsledky.'); return; }
+      setStatus('');
+      render(data);
+    } catch (err) {
+      setStatus(err.message, true);
+    } finally {
+      $('go').disabled = false;
+    }
+  });
+
+  document.querySelectorAll('[data-format]').forEach((btn) =>
+    btn.addEventListener('click', async () => {
+      if (!current) return;
+      const format = btn.dataset.format;
+      try {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ format, query: current.query, results: current.results }),
+        });
+        if (!res.ok) throw new Error((await res.json()).error || 'Export selhal.');
+        const blob = await res.blob();
+        const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || `serp.${format}`;
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      } catch (err) {
+        setStatus(err.message, true);
+      }
+    }),
+  );
+</script>
+</body>
+</html>
